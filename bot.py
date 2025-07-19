@@ -1,9 +1,16 @@
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 import gspread
+import os
+import json
 
-# Подключение к Google Sheets
-gc = gspread.service_account(filename='mycode.json')  # имя твоего JSON файла
+# Получаем ключи из переменной окружения
+google_creds_json = os.environ.get("GOOGLE_CREDS")
+if not google_creds_json:
+    raise Exception("GOOGLE_CREDS переменная не найдена")
+
+creds_dict = json.loads(google_creds_json)
+gc = gspread.service_account_from_dict(creds_dict)
 sh = gc.open('CG 1')  # имя таблицы
 worksheet = sh.sheet1
 
