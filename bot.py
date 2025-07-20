@@ -3,6 +3,10 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Con
 import gspread
 import os
 import json
+from keep_alive import keep_alive
+
+# Запуск web-сервера
+keep_alive()
 
 # Получаем ключи из переменной окружения
 google_creds_json = os.environ.get("GOOGLE_CREDS")
@@ -14,7 +18,9 @@ gc = gspread.service_account_from_dict(creds_dict)
 sh = gc.open('CG 1')  # имя таблицы
 worksheet = sh.sheet1
 
-TOKEN = "7885647251:AAGOTDVoJy6QIbwzwKYcPT5Sxh2T6ldf4R8"
+TOKEN = os.environ.get("BOT_TOKEN")
+if not TOKEN:
+    raise Exception("BOT_TOKEN переменная не найдена")
 
 # Главное меню
 def get_main_keyboard():
@@ -69,7 +75,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return
 
-    # Статические ответы
     responses = {
         "📦 Адрес Иву Самолёт": "Адрес Иву Самолёт: Zhejiang, Yiwu, улица, склад 123",
         "🚛 Адрес Гуанчжоу Камаз": "Адрес Гуанчжоу Камаз: Guangdong, Guangzhou, улица, склад 456",
@@ -91,6 +96,7 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
 print("Бот запущен...")
 app.run_polling()
+
 
 
 
