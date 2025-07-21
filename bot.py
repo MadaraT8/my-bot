@@ -4,8 +4,10 @@ import gspread
 import os
 import json
 from keep_alive import keep_alive
+import asyncio
+from aiohttp import web
 
-# Запуск web-сервера
+# Запуск web-сервера (для Render)
 keep_alive()
 
 # Получаем ключи из переменной окружения
@@ -89,14 +91,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Я не понял, выбери команду с кнопки 🙂", reply_markup=get_main_keyboard())
 
-# Запуск бота
+# === Webhook логика для Render ===
 app = ApplicationBuilder().token(TOKEN).build()
+
 app.add_handler(CommandHandler("start", start))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-print("Бот запущен...")
-app.run_polling()
+async def webhook(request):
+    data = await request.json()
+    update = Update.de_json(data, app.bot)
+    await app.process_update(update)
+    return web.Response()
 
+# Устанавливаем Webhook
+app.bot.set_webhook("https://my-bot-s97n.onrender.com")
+print("Webhook установлен...")
 
+# aiohttp web-сервер
+web_app = web.Application()
+web_app.router.add_post("/", webhook)
 
+if _name_ == "_main_":
+    web.run_app(web_app, host="0.0.0.0", port=10000)
 
