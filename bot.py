@@ -116,6 +116,14 @@ async def main():
     await site.start()
 
     await asyncio.Event().wait()  # Бесконечное ожидание
+<<<<<<< HEAD
+=======
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
+
+>>>>>>> a6344d8dcdaae7f9bf6be30194fdc5adad5f389f
 
 if __name__ == "__main__":
     asyncio.run(main())
