@@ -89,41 +89,37 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Я не понял, выбери команду с кнопки 🙂", reply_markup=get_main_keyboard())
 
-# ========== AIOHTTP и Telegram Webhook ==========
+async def webhook_handler(request):
+    data = await request.json()
+    update = Update.de_json(data, app.bot)
+    await app.process_update(update)
+    return web.Response(text="OK", status=200)
 
 async def main():
+    global app
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    async def webhook_handler(request):
-        data = await request.json()
-        update = Update.de_json(data, app.bot)
-        await app.process_update(update)
-        return web.Response()
+    PORT = int(os.environ.get("PORT", 10000))
+    WEBHOOK_URL = "https://my-bot-s97n.onrender.com/webhook"
 
     await app.initialize()
-    await app.bot.set_webhook("https://my-bot-s97n.onrender.com")
-    await app.start()
-    print("Webhook установлен и бот запущен...")
+    await app.bot.set_webhook(WEBHOOK_URL)
+    print(f"✅ Webhook установлен: {WEBHOOK_URL}")
 
     web_app = web.Application()
-    web_app.router.add_post("/", webhook_handler)
+    web_app.router.add_post("/webhook", webhook_handler)
+    web_app.router.add_get("/", lambda request: web.Response(text="I'm Alive"))  # Для проверки работы
+
     runner = web.AppRunner(web_app)
     await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", 10000)
+    site = web.TCPSite(runner, "0.0.0.0", PORT)
     await site.start()
 
-    await asyncio.Event().wait()  # Бесконечное ожидание
-<<<<<<< HEAD
-=======
+    print(f"🤖 Бот запущен на порту {PORT}")
+    await asyncio.Event().wait()
 
-if __name__ == "__main__":
-    asyncio.run(main())
-
-
->>>>>>> a6344d8dcdaae7f9bf6be30194fdc5adad5f389f
-
-if __name__ == "__main__":
+if _name_ == "_main_":
     asyncio.run(main())
