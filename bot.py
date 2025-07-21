@@ -102,6 +102,20 @@ async def webhook(request):
     update = Update.de_json(data, app.bot)
     await app.process_update(update)
     return web.Response()
+<<<<<<< HEAD
+=======
+
+# Устанавливаем Webhook
+app.bot.set_webhook("https://my-bot-s97n.onrender.com")
+print("Webhook установлен...")
+
+# aiohttp web-сервер
+web_app = web.Application()
+web_app.router.add_post("/", webhook)
+
+if _name_ == "_main_":
+    web.run_app(web_app, host="0.0.0.0", port=10000)
+>>>>>>> 205cc69c4688847bf6728be3bacb86d0147881af
 
 # Устанавливаем Webhook
 app.bot.set_webhook("https://my-bot-s97n.onrender.com")
