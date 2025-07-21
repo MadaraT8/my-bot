@@ -7,17 +7,16 @@ from keep_alive import keep_alive
 import asyncio
 from aiohttp import web
 
-# Запуск web-сервера (для Render)
 keep_alive()
 
-# Получаем ключи из переменной окружения
+# Авторизация Google Sheets
 google_creds_json = os.environ.get("GOOGLE_CREDS")
 if not google_creds_json:
     raise Exception("GOOGLE_CREDS переменная не найдена")
 
 creds_dict = json.loads(google_creds_json)
 gc = gspread.service_account_from_dict(creds_dict)
-sh = gc.open('CG 1')  # имя таблицы
+sh = gc.open('CG 1')
 worksheet = sh.sheet1
 
 TOKEN = os.environ.get("BOT_TOKEN")
@@ -38,7 +37,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = get_main_keyboard()
     await update.message.reply_text("Чем могу помочь?", reply_markup=reply_markup)
 
-# Обработка сообщений
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
@@ -91,40 +89,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Я не понял, выбери команду с кнопки 🙂", reply_markup=get_main_keyboard())
 
-# === Webhook логика для Render ===
-app = ApplicationBuilder().token(TOKEN).build()
+# ========== AIOHTTP и Telegram Webhook ==========
 
-app.add_handler(CommandHandler("start", start))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+async def main():
+    app = ApplicationBuilder().token(TOKEN).build()
 
-async def webhook(request):
-    data = await request.json()
-    update = Update.de_json(data, app.bot)
-    await app.process_update(update)
-    return web.Response()
-<<<<<<< HEAD
-=======
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-# Устанавливаем Webhook
-app.bot.set_webhook("https://my-bot-s97n.onrender.com")
-print("Webhook установлен...")
+    async def webhook_handler(request):
+        data = await request.json()
+        update = Update.de_json(data, app.bot)
+        await app.process_update(update)
+        return web.Response()
 
-# aiohttp web-сервер
-web_app = web.Application()
-web_app.router.add_post("/", webhook)
+    await app.initialize()
+    await app.bot.set_webhook("https://my-bot-s97n.onrender.com")
+    await app.start()
+    print("Webhook установлен и бот запущен...")
 
-if _name_ == "_main_":
-    web.run_app(web_app, host="0.0.0.0", port=10000)
->>>>>>> 205cc69c4688847bf6728be3bacb86d0147881af
+    web_app = web.Application()
+    web_app.router.add_post("/", webhook_handler)
+    runner = web.AppRunner(web_app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", 10000)
+    await site.start()
 
-# Устанавливаем Webhook
-app.bot.set_webhook("https://my-bot-s97n.onrender.com")
-print("Webhook установлен...")
+    await asyncio.Event().wait()  # Бесконечное ожидание
 
-# aiohttp web-сервер
-web_app = web.Application()
-web_app.router.add_post("/", webhook)
+if __name__ == "__main__":
+    asyncio.run(main())
 
-if _name_ == "_main_":
-    web.run_app(web_app, host="0.0.0.0", port=10000)
+
 
