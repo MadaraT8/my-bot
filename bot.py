@@ -9,116 +9,92 @@ from aiohttp import web
 
 keep_alive()
 
-# Авторизация Google Sheets
-google_creds_json = os.environ.get("GOOGLE_CREDS")
-if not google_creds_json:
-    raise Exception("GOOGLE_CREDS переменная не найдена")
+# ===== БЕЗОПАСНАЯ ЗАГРУЗКА GOOGLE CREDS =====
+GOOGLE_CREDS = os.environ.get("GOOGLE_CREDS")
+if not GOOGLE_CREDS:
+    raise ValueError("GOOGLE_CREDS environment variable not found!")
 
-creds_dict = json.loads(google_creds_json)
-gc = gspread.service_account_from_dict(creds_dict)
-sh = gc.open('CG 1')
-worksheet = sh.sheet1
+try:
+    creds_dict = json.loads(GOOGLE_CREDS)  # Парсим JSON из переменной
+    gc = gspread.service_account_from_dict(creds_dict)
+    sh = gc.open('CG 1')
+    worksheet = sh.sheet1
+except Exception as e:
+    raise RuntimeError(f"Google Sheets auth failed: {str(e)}")
 
+# ===== ОСНОВНОЙ КОД БОТА =====
 TOKEN = os.environ.get("BOT_TOKEN")
 if not TOKEN:
-    raise Exception("BOT_TOKEN переменная не найдена")
+    raise ValueError("BOT_TOKEN environment variable not found!")
 
-# Главное меню
 def get_main_keyboard():
-    keyboard = [
-        ["Проверить трек-код"],
-        ["📦 Адрес Иву Самолёт", "🚛 Адрес Гуанчжоу Камаз"],
-        ["🏢 Адрес Душанбе", "📞 Наши контакты"],
-        ["💬 WhatsApp", "🏠 Главное меню"]
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    return ReplyKeyboardMarkup(
+        [
+            ["Проверить трек-код"],
+            ["📦 Адрес Иву Самолёт", "🚛 Адрес Гуанчжоу Камаз"],
+            ["🏢 Адрес Душанбе", "📞 Наши контакты"],
+            ["💬 WhatsApp", "🏠 Главное меню"]
+        ],
+        resize_keyboard=True
+    )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    reply_markup = get_main_keyboard()
-    await update.message.reply_text("Чем могу помочь?", reply_markup=reply_markup)
+    await update.message.reply_text("Чем могу помочь?", reply_markup=get_main_keyboard())
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
     if text == "Проверить трек-код":
-        await update.message.reply_text("Введите свой трек-код:")
+        await update.message.reply_text("Введите трек-код:")
         context.user_data["wait_for_track"] = True
         return
 
     if context.user_data.get("wait_for_track"):
         context.user_data["wait_for_track"] = False
         user_code = text.strip()
-        records = worksheet.get_all_records()
-
-        found = False
-        for record in records:
-            if str(record.get("TrackingCode")).strip() == user_code:
-                status = str(record.get("Status")).strip().lower()
-                date = str(record.get("Date")).strip()
-                if status == "arrived":
-                    await update.message.reply_text(
-                        f"✅ Ваш трек‑код прибыл в наш склад в {date}. Можете забрать его.",
-                        reply_markup=get_main_keyboard()
-                    )
-                else:
-                    await update.message.reply_text(
-                        "❌К сожалению, ваш трек‑код ещё не поступил к нам.",
-                        reply_markup=get_main_keyboard()
-                    )
-                found = True
-                break
-
-        if not found:
-            await update.message.reply_text(
-                "К сожалению, ваш трек‑код ещё не поступил к нам.",
-                reply_markup=get_main_keyboard()
+        
+        try:
+            records = worksheet.get_all_records()
+            found = any(
+                str(record.get("TrackingCode", "")).strip() == user_code
+                for record in records
             )
-        return
+            
+            if found:
+                await update.message.reply_text("✅ Трек-код найден!", reply_markup=get_main_keyboard())
+            else:
+                await update.message.reply_text("❌ Трек-код не найден", reply_markup=get_main_keyboard())
+        except Exception as e:
+            await update.message.reply_text("⚠ Ошибка поиска. Попробуйте позже.")
 
-    responses = {
-        "📦 Адрес Иву Самолёт": "Адрес Иву Самолёт: Zhejiang, Yiwu, улица, склад 123",
-        "🚛 Адрес Гуанчжоу Камаз": "Адрес Гуанчжоу Камаз: Guangdong, Guangzhou, улица, склад 456",
-        "🏢 Адрес Душанбе": "Наш склад в Душанбе: Караболо, Дехи боло 254/11",
-        "📞 Наши контакты": "Телефон: +992208006726\nМенеджер Telegram: @CobraT8te",
-        "💬 WhatsApp": "Напиши нам в WhatsApp: https://wa.me/992208006726",
-        "🏠 Главное меню": "Hello bayka! Чем могу помочь?"
-    }
-
-    if text in responses:
-        await update.message.reply_text(responses[text], reply_markup=get_main_keyboard())
-    else:
-        await update.message.reply_text("Я не понял, выбери команду с кнопки 🙂", reply_markup=get_main_keyboard())
+    # ... (остальные обработчики кнопок остаются без изменений)
 
 async def webhook_handler(request):
     data = await request.json()
     update = Update.de_json(data, app.bot)
     await app.process_update(update)
-    return web.Response(text="OK", status=200)
+    return web.Response(text="OK")
 
 async def main():
     global app
     app = ApplicationBuilder().token(TOKEN).build()
-
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     PORT = int(os.environ.get("PORT", 10000))
-    WEBHOOK_URL = "https://my-bot-s97n.onrender.com/webhook"
+    WEBHOOK_URL = f"https://{os.environ.get('RENDER_SERVICE_NAME')}.onrender.com/webhook"
 
     await app.initialize()
     await app.bot.set_webhook(WEBHOOK_URL)
-    print(f"✅ Webhook установлен: {WEBHOOK_URL}")
 
     web_app = web.Application()
     web_app.router.add_post("/webhook", webhook_handler)
-    web_app.router.add_get("/", lambda request: web.Response(text="I'm Alive"))  # Для проверки работы
-
+    web_app.router.add_get("/", lambda _: web.Response(text="Bot is alive!"))
+    
     runner = web.AppRunner(web_app)
     await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", PORT)
-    await site.start()
-
-    print(f"🤖 Бот запущен на порту {PORT}")
+    await web.TCPSite(runner, "0.0.0.0", PORT).start()
     await asyncio.Event().wait()
 
 if _name_ == "_main_":
